@@ -5,7 +5,7 @@ const authRoutes = require('./routes/auth')
 app.use(express.json());
 
 // Routen
-//app.use('/auth', authRoutes);
+app.use('/auth', authRoutes);
 
 app.get('/', (req,res) => {
     res.status(200).json({message:'Hello from server'});
