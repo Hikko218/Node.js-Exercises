@@ -1,9 +1,11 @@
-const express = require('express')
+const express = require('express');
 const router = express.Router();
-const app = express()
-const fs = require('fs')
-const path = require('path')
-const bcrypt = require('bcrypt')
+const fs = require('fs');
+const path = require('path');
+const bcrypt = require('bcrypt');
+
+const jwt = require('jsonwebtoken');
+const SECRET_KEY = 'supersecret123';
 
 const usersPath = path.join(__dirname, '../data/users.json')
 
@@ -15,7 +17,7 @@ function loadUsers() {
 }
 //safe users
  function saveUsers(users) {
-    fs.writeFileSync(usersPath, JSON.stringify(users, null,2));
+    fs.writeFileSync(usersPath, JSON.stringify(users, null,2))
  }
 
  //POST /auth/register
@@ -45,7 +47,17 @@ function loadUsers() {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({message:'Invalid credentials'});
 
-    res.json({message:'Login successful'})
+    const token = jwt.sign({username: user.username}, SECRET_KEY,{expiresIn:'1h'});
+
+    res.json({message:'Login successful', token: token})
+        
+ });
+
+ //auth middleware
+ const authenticateToken = require('../root/authMiddleware');
+
+ router.get('/protected', authenticateToken, (req,res) =>{
+    res.json({message: `Hallo ${req.user.username}, you are logged in`})
  });
 
  module.exports = router;
