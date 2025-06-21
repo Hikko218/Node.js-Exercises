@@ -1,63 +1,51 @@
 const express = require('express');
-const router = express.Router();
-const fs = require('fs');
-const path = require('path');
 const bcrypt = require('bcrypt');
-
 const jwt = require('jsonwebtoken');
-const SECRET_KEY = 'supersecret123';
+const User = require('../models/User');
+require('dotenv').config(); 
 
-const usersPath = path.join(__dirname, '../data/users.json')
+const router = express.Router();
+const SECRET_KEY = process.env.SECRET_KEY; // optional in .env
 
-//load users
-function loadUsers() {
-    if (!fs.existsSync(usersPath)) return [];
-    const data = fs.readFileSync(usersPath);
-    return JSON.parse(data);
-}
-//safe users
- function saveUsers(users) {
-    fs.writeFileSync(usersPath, JSON.stringify(users, null,2))
- }
+// POST /auth/register
+router.post('/register', async (req, res) => {
+  const { username, password } = req.body;
 
- //POST /auth/register
- router.post('/register', async (req,res)=>{
-    const{username,password} = req.body;
-    if(!username || !password)
-        return res.status(400).json({message: "Username and password required"});
+  if (!username || !password)
+    return res.status(400).json({ message: 'Username und Passwort erforderlich.' });
 
-    const users = loadUsers();
-    if(users.find(u => u.username === username))
-        return res.status(409).json({message:'User already exists'});
+  try {
+    const userExists = await User.findOne({ username });
+    if (userExists)
+      return res.status(409).json({ message: 'Benutzer existiert bereits.' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    users.push({username, password: hashedPassword});
-    saveUsers(users);
+    const newUser = new User({ username, password: hashedPassword });
 
-    res.status(201).json({message:'User registration successful'})
- });
+    await newUser.save();
+    res.status(201).json({ message: 'Benutzer registriert.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Fehler beim Registrieren.' });
+  }
+});
 
- //POST /auth/login
- router.post('/login', async (req,res)=> {
-    const{username,password} = req.body;
-    const users = loadUsers();
-    const user = users.find(u=> u.username ===username);
-    if(!user) return res.status(401).json({message:'Invalid credentials'});
+// POST /auth/login
+router.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  try {
+    const user = await User.findOne({ username });
+    if (!user) return res.status(401).json({ message: 'Ungültige Anmeldedaten' });
 
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({message:'Invalid credentials'});
+    if (!valid) return res.status(401).json({ message: 'Ungültige Anmeldedaten' });
 
-    const token = jwt.sign({username: user.username}, SECRET_KEY,{expiresIn:'1h'});
+    const token = jwt.sign({ username: user.username, id: user._id }, SECRET_KEY, { expiresIn: '1h' });
+    res.json({ message: 'Login erfolgreich', token });
+  } catch (err) {
+    res.status(500).json({ message: 'Fehler beim Login.' });
+  }
+});
 
-    res.json({message:'Login successful', token: token})
-        
- });
+module.exports = router;
 
- //auth middleware
- const authenticateToken = require('../root/authMiddleware');
-
- router.get('/protected', authenticateToken, (req,res) =>{
-    res.json({message: `Hallo ${req.user.username}, you are logged in`})
- });
-
- module.exports = router;
